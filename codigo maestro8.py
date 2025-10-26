@@ -1410,6 +1410,48 @@ class CodeForgeApp:
         self.menu_frame = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="ridge")
         self.menu_frame.place(x=10, y=10, width=320, height=760)
 
+        # contenedor con canvas + scrollbar para menú lateral
+        self.menu_canvas = tk.Canvas(
+            self.menu_frame,
+            bg="#1a1a1a",
+            highlightthickness=0,
+            bd=0,
+        )
+        self.menu_canvas.pack(side="left", fill="both", expand=True)
+
+        self.menu_scroll = tk.Scrollbar(
+            self.menu_frame,
+            orient="vertical",
+            command=self.menu_canvas.yview,
+        )
+        self.menu_scroll.pack(side="right", fill="y")
+
+        self.menu_canvas.configure(yscrollcommand=self.menu_scroll.set)
+
+        self.menu_inner = tk.Frame(self.menu_canvas, bg="#1a1a1a")
+        self.menu_window = self.menu_canvas.create_window(
+            (0, 0), window=self.menu_inner, anchor="nw"
+        )
+
+        self.menu_inner.bind(
+            "<Configure>",
+            lambda event: self.menu_canvas.configure(
+                scrollregion=self.menu_canvas.bbox("all")
+            ),
+        )
+
+        self.menu_canvas.bind(
+            "<Configure>",
+            lambda event: self.menu_canvas.itemconfig(
+                self.menu_window, width=event.width
+            ),
+        )
+
+        # soporte para scroll con rueda del mouse
+        self.menu_canvas.bind_all("<MouseWheel>", self._on_mousewheel_menu)
+        self.menu_canvas.bind_all("<Button-4>", self._on_mousewheel_menu)
+        self.menu_canvas.bind_all("<Button-5>", self._on_mousewheel_menu)
+
         self.right_top = tk.Frame(self.root, bg="#1a1a1a", bd=1, relief="ridge")
         self.right_top.place(x=340, y=10, width=950, height=200)
 
@@ -1506,6 +1548,32 @@ class CodeForgeApp:
 
         self.build_menu_buttons()
 
+    def _on_mousewheel_menu(self, event):
+        x_root = getattr(event, "x_root", None)
+        y_root = getattr(event, "y_root", None)
+
+        if x_root is not None and y_root is not None:
+            widget = self.root.winfo_containing(x_root, y_root)
+        else:
+            widget = getattr(event, "widget", None)
+
+        inside_menu = False
+        while widget is not None:
+            if widget in (self.menu_frame, self.menu_inner, self.menu_canvas):
+                inside_menu = True
+                break
+            widget = getattr(widget, "master", None)
+
+        if not inside_menu:
+            return
+
+        if hasattr(event, "delta") and event.delta:
+            self.menu_canvas.yview_scroll(int(-event.delta / 120), "units")
+        elif getattr(event, "num", None) == 4:
+            self.menu_canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", None) == 5:
+            self.menu_canvas.yview_scroll(1, "units")
+
     def build_menu_buttons(self):
         # agrupamos por tema (lo que está antes del " - ")
         # ejemplo: "Glucosa - Básico" -> tema "Glucosa"
@@ -1518,7 +1586,7 @@ class CodeForgeApp:
 
         # mostramos TODO visible:
         tk.Label(
-            self.menu_frame,
+            self.menu_inner,
             text="🧬 TEMAS / NIVELES",
             bg="#1a1a1a",
             fg="#00ff99",
@@ -1529,7 +1597,7 @@ class CodeForgeApp:
         for tema in sorted(temas.keys()):
             # etiqueta tema
             tk.Label(
-                self.menu_frame,
+                self.menu_inner,
                 text=tema.upper(),
                 bg="#1a1a1a",
                 fg="#00ffcc",
@@ -1549,7 +1617,7 @@ class CodeForgeApp:
 
             for full_key in ordered_keys:
                 b = tk.Button(
-                    self.menu_frame,
+                    self.menu_inner,
                     text=full_key,
                     command=lambda k=full_key: self.show_lesson(k),
                     bg="#2b2b2b",
